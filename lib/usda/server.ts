@@ -1,3 +1,5 @@
+import "server-only";
+
 import type { FoodDetails, FoodSearchResult } from "@/types/nutrition";
 
 export class RateLimitError extends Error {
@@ -5,6 +7,16 @@ export class RateLimitError extends Error {
     super(message);
     this.name = "RateLimitError";
   }
+}
+
+const USDA_BASE_URL = "https://api.nal.usda.gov/fdc/v1";
+
+function getApiKey() {
+  const apiKey = process.env.USDA_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing USDA_API_KEY.");
+  }
+  return apiKey;
 }
 
 export async function fetchWithRetry(
@@ -28,13 +40,17 @@ export async function fetchWithRetry(
 }
 
 export async function searchFoods(query: string) {
+  const apiKey = getApiKey();
   const data = await fetchWithRetry(
-    `/api/usda/search?query=${encodeURIComponent(query)}`
+    `${USDA_BASE_URL}/foods/search?api_key=${apiKey}&query=${encodeURIComponent(
+      query
+    )}&pageSize=15&dataType=Foundation,SR%20Legacy`
   );
   return (data.foods ?? []) as FoodSearchResult[];
 }
 
 export async function getFoodDetails(fdcId: number) {
-  const data = await fetchWithRetry(`/api/usda/food/${fdcId}`);
+  const apiKey = getApiKey();
+  const data = await fetchWithRetry(`${USDA_BASE_URL}/food/${fdcId}?api_key=${apiKey}`);
   return data as FoodDetails;
 }
