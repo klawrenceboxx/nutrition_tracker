@@ -1,65 +1,189 @@
-import Image from "next/image";
+"use client";
+
+import { useMemo, useState } from "react";
+import AppHeader from "@/components/layout/AppHeader";
+import PageSection from "@/components/layout/PageSection";
+import EntryList from "@/components/log/EntryList";
+import NutritionPanel from "@/components/nutrition/NutritionPanel";
+import FoodSearchCard from "@/components/search/FoodSearchCard";
+import SelectedFoodCard from "@/components/search/SelectedFoodCard";
+import useLocalStorageState from "@/hooks/useLocalStorageState";
+import isSameLocalDay from "@/lib/date/isSameLocalDay";
+import { NUTRIENT_METADATA, TRACKED_CODES } from "@/lib/nutrition/metadata";
+import { getFoodDetails, RateLimitError, searchFoods } from "@/lib/usda/client";
+import type { Entry, FoodDetails, FoodSearchResult, Totals } from "@/types/nutrition";
+
+const APP_ID = typeof (globalThis as { __app_id?: string }).__app_id !== "undefined"
+  ? (globalThis as { __app_id?: string }).__app_id ?? "oatmeal-bars-m1"
+  : "oatmeal-bars-m1";
 
 export default function Home() {
+  const [apiKey, setApiKey] = useLocalStorageState<string>(`${APP_ID}-apikey`, "DEMO_KEY");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<FoodSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [rateLimited, setRateLimited] = useState(false);
+  const [selectedFood, setSelectedFood] = useState<(FoodDetails & { amount: number }) | null>(
+    null
+  );
+  const [showSettings, setShowSettings] = useState(false);
+  const [log, setLog] = useLocalStorageState<Entry[]>(`${APP_ID}-log`, []);
+  const [viewMode, setViewMode] = useState<"label" | "table">("label");
+  const [calorieGoal] = useState(2000);
+
+  const handleSearch = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    setError(null);
+    setRateLimited(false);
+    setSearchResults([]);
+
+    try {
+      const results = await searchFoods(apiKey, searchQuery);
+      setSearchResults(results);
+      if (results.length === 0) setError("No results found.");
+    } catch (err) {
+      if (err instanceof RateLimitError) {
+        setRateLimited(true);
+        setError(null);
+      } else {
+        setError(err instanceof Error ? err.message : "Something went wrong.");
+      }
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const selectFood = async (fdcId: number) => {
+    setError(null);
+    setRateLimited(false);
+    try {
+      const data = await getFoodDetails(apiKey, fdcId);
+      setSelectedFood({ ...data, amount: 100 });
+    } catch (err) {
+      if (err instanceof RateLimitError) {
+        setRateLimited(true);
+        return;
+      }
+      setError(`Failed to fetch food details. ${err instanceof Error ? err.message : ""}`.trim());
+    }
+  };
+
+  const addToLog = () => {
+    if (!selectedFood) return;
+    const entry: Entry = {
+      id: Date.now(),
+      fdcId: selectedFood.fdcId,
+      description: selectedFood.description,
+      grams: Number.parseFloat(String(selectedFood.amount)) || 0,
+      nutrients: selectedFood.foodNutrients,
+      timestamp: new Date().toISOString(),
+    };
+    setLog((prev) => [entry, ...prev]);
+    setSelectedFood(null);
+    setSearchQuery("");
+    setSearchResults([]);
+  };
+
+  const totals = useMemo<Totals>(() => {
+    const acc: Totals = {};
+    TRACKED_CODES.forEach((code) => {
+      acc[code] = { total: 0, status: "missing" };
+    });
+    log.forEach((entry) => {
+      TRACKED_CODES.forEach((code) => {
+        const meta = NUTRIENT_METADATA[code];
+        const nData = entry.nutrients.find(
+          (nutrient) =>
+            nutrient.nutrient?.number === code.toString() ||
+            nutrient.nutrientId === code ||
+            (meta.fallback &&
+              (nutrient.nutrient?.number === meta.fallback.toString() ||
+                nutrient.nutrientId === meta.fallback))
+        );
+        if (nData) {
+          acc[code].total += (nData.amount * entry.grams) / 100;
+          acc[code].status = "present";
+        }
+      });
+    });
+    return acc;
+  }, [log]);
+
+  const resetToday = () => {
+    if (!confirm("Reset today?")) return;
+    setLog((prev) => prev.filter((entry) => !isSameLocalDay(entry.timestamp, new Date())));
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20">
+      <AppHeader
+        onToggleSettings={() => setShowSettings((prev) => !prev)}
+        onResetToday={resetToday}
+      />
+
+      {showSettings && (
+        <div className="bg-slate-800 text-white p-4 animate-in slide-in-from-top duration-200">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">
+                Settings
+              </h3>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="text-slate-300 hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+            <div className="bg-slate-700/60 border border-slate-600 rounded-lg p-4 text-sm">
+              Coming soon.
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+      )}
+
+      <PageSection>
+        <div className="lg:col-span-5 space-y-6">
+          <FoodSearchCard
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
+            onSubmit={handleSearch}
+            isSearching={isSearching}
+            error={error}
+            rateLimited={rateLimited}
+            results={searchResults}
+            onSelectFood={selectFood}
+          />
+
+          {selectedFood && (
+            <SelectedFoodCard
+              food={selectedFood}
+              onChangeAmount={(amount) =>
+                setSelectedFood((prev) => (prev ? { ...prev, amount } : prev))
+              }
+              onLog={addToLog}
+              onCancel={() => setSelectedFood(null)}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          )}
+
+          <EntryList
+            entries={log}
+            onDelete={(entryId) => setLog((prev) => prev.filter((entry) => entry.id !== entryId))}
+          />
         </div>
-      </main>
+
+        <div className="lg:col-span-7 space-y-6">
+          <NutritionPanel
+            viewMode={viewMode}
+            onChangeView={setViewMode}
+            totals={totals}
+            calorieGoal={calorieGoal}
+          />
+        </div>
+      </PageSection>
     </div>
   );
 }
