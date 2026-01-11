@@ -1,0 +1,58 @@
+export const DRV_FOOD_COMPONENTS = {
+  fat: {
+    unit: "g",
+    adult: 78,
+    infant: 30,
+    child_1_3: 39,
+    pregnant_lactating: 78,
+  },
+  saturated_fat: {
+    unit: "g",
+    adult: 20,
+    infant: null,
+    child_1_3: 10,
+    pregnant_lactating: 20,
+  },
+  cholesterol: {
+    unit: "mg",
+    adult: 300,
+    infant: null,
+    child_1_3: 300,
+    pregnant_lactating: 300,
+  },
+  total_carbohydrate: {
+    unit: "g",
+    adult: 275,
+    infant: 95,
+    child_1_3: 150,
+    pregnant_lactating: 275,
+  },
+  sodium: {
+    unit: "mg",
+    adult: 2300,
+    infant: null,
+    child_1_3: 1500,
+    pregnant_lactating: 2300,
+  },
+  dietary_fiber: {
+    unit: "g",
+    adult: 28,
+    infant: null,
+    child_1_3: 14,
+    pregnant_lactating: 28,
+  },
+  protein: {
+    unit: "g",
+    adult: 50,
+    infant: null,
+    child_1_3: 13,
+    pregnant_lactating: null,
+  },
+  added_sugars: {
+    unit: "g",
+    adult: 50,
+    infant: null,
+    child_1_3: 25,
+    pregnant_lactating: 50,
+  },
+};

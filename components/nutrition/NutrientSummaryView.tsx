@@ -1,12 +1,18 @@
 import { NUTRIENT_METADATA, TRACKED_CODES } from "@/lib/nutrition/metadata";
-import type { Totals } from "@/types/nutrition";
+import { getDailyValue } from "@/lib/nutrition/dailyValues";
+import type { DvProfile, Totals } from "@/types/nutrition";
 
 type NutrientSummaryViewProps = {
   totals: Totals;
   calorieGoal: number;
+  profile: DvProfile;
 };
 
-export default function NutrientSummaryView({ totals, calorieGoal }: NutrientSummaryViewProps) {
+export default function NutrientSummaryView({
+  totals,
+  calorieGoal,
+  profile,
+}: NutrientSummaryViewProps) {
   return (
     <div className="space-y-8">
       {(["Macros", "Vitamins", "Minerals"] as const).map((cat) => (
@@ -19,19 +25,20 @@ export default function NutrientSummaryView({ totals, calorieGoal }: NutrientSum
               (code) => {
                 const meta = NUTRIENT_METADATA[code];
                 const data = totals[code];
-                const dv = meta.isGoal ? calorieGoal : meta.dv;
-                const percent = (data.total / dv) * 100;
+                const dv = meta.isGoal ? calorieGoal : getDailyValue(meta, profile);
+                const percent = dv ? (data.total / dv) * 100 : null;
                 const isMissing = data.status === "missing";
+                const isUnavailable = isMissing || dv === null;
                 return (
                   <div key={code}>
                     <div className="flex justify-between items-end mb-1">
                       <span className="text-xs font-bold text-slate-600">{meta.name}</span>
                       <span
                         className={`text-[10px] font-black ${
-                          isMissing ? "text-slate-200" : "text-slate-900"
+                          isUnavailable ? "text-slate-200" : "text-slate-900"
                         }`}
                       >
-                        {isMissing
+                        {isUnavailable
                           ? "N/A"
                           : `${data.total.toLocaleString(undefined, {
                               maximumFractionDigits: 1,
@@ -39,7 +46,7 @@ export default function NutrientSummaryView({ totals, calorieGoal }: NutrientSum
                       </span>
                     </div>
                     <div className="h-1.5 w-full bg-slate-100 rounded-full relative overflow-hidden">
-                      {!isMissing && (
+                      {!isUnavailable && percent !== null && (
                         <div
                           className={`h-full rounded-full ${
                             percent > 100 ? "bg-red-400" : "bg-amber-400"
@@ -47,7 +54,9 @@ export default function NutrientSummaryView({ totals, calorieGoal }: NutrientSum
                           style={{ width: `${Math.min(percent, 100)}%` }}
                         />
                       )}
-                      {isMissing && <div className="absolute inset-0 bg-slate-50 opacity-50" />}
+                      {isUnavailable && (
+                        <div className="absolute inset-0 bg-slate-50 opacity-50" />
+                      )}
                     </div>
                   </div>
                 );

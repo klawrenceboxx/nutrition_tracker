@@ -1,12 +1,18 @@
 import { NUTRIENT_METADATA, TRACKED_CODES } from "@/lib/nutrition/metadata";
-import type { Totals } from "@/types/nutrition";
+import { getDailyValue } from "@/lib/nutrition/dailyValues";
+import type { DvProfile, Totals } from "@/types/nutrition";
 
 type NutrientDetailsTableProps = {
   totals: Totals;
   calorieGoal: number;
+  profile: DvProfile;
 };
 
-export default function NutrientDetailsTable({ totals, calorieGoal }: NutrientDetailsTableProps) {
+export default function NutrientDetailsTable({
+  totals,
+  calorieGoal,
+  profile,
+}: NutrientDetailsTableProps) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-xs">
@@ -22,9 +28,10 @@ export default function NutrientDetailsTable({ totals, calorieGoal }: NutrientDe
           {TRACKED_CODES.map((code) => {
             const meta = NUTRIENT_METADATA[code];
             const data = totals[code];
-            const dv = meta.isGoal ? calorieGoal : meta.dv;
-            const percent = (data.total / dv) * 100;
+            const dv = meta.isGoal ? calorieGoal : getDailyValue(meta, profile);
+            const percent = dv ? (data.total / dv) * 100 : null;
             const isMissing = data.status === "missing";
+            const isUnavailable = isMissing || dv === null;
             return (
               <tr key={code} className="border-b last:border-0">
                 <td className="py-2.5 font-bold text-slate-700">{meta.name}</td>
@@ -33,10 +40,14 @@ export default function NutrientDetailsTable({ totals, calorieGoal }: NutrientDe
                 </td>
                 <td
                   className={`py-2.5 text-right font-black ${
-                    isMissing ? "text-slate-200" : percent > 100 ? "text-red-500" : "text-amber-600"
+                    isUnavailable
+                      ? "text-slate-200"
+                      : percent && percent > 100
+                        ? "text-red-500"
+                        : "text-amber-600"
                   }`}
                 >
-                  {isMissing ? "—" : `${Math.round(percent)}%`}
+                  {isUnavailable || percent === null ? "—" : `${Math.round(percent)}%`}
                 </td>
                 <td className="py-2.5 text-center">
                   <span
