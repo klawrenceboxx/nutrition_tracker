@@ -1,14 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AppHeader from "@/components/layout/AppHeader";
 import PageSection from "@/components/layout/PageSection";
 import EntryList from "@/components/log/EntryList";
+import MealsCard from "@/components/meals/MealsCard";
 import NutritionPanel from "@/components/nutrition/NutritionPanel";
 import FoodSearchCard from "@/components/search/FoodSearchCard";
 import SelectedFoodCard from "@/components/search/SelectedFoodCard";
 import useLocalStorageState from "@/hooks/useLocalStorageState";
 import isSameLocalDay from "@/lib/date/isSameLocalDay";
+import { ensureFoodsCached, getMealTotalsFromCache, getMissingFoodIds } from "@/lib/meals/computeMealNutrients";
 import { DV_PROFILE_LABELS, DV_PROFILES } from "@/lib/nutrition/dailyValues";
 import { NUTRIENT_METADATA, TRACKED_CODES } from "@/lib/nutrition/metadata";
 import { getFoodDetails, RateLimitError, searchFoods } from "@/lib/usda/client";
@@ -21,6 +23,7 @@ import type {
   SavedFood,
   Totals,
 } from "@/types/nutrition";
+import type { MealTemplate } from "@/lib/meals/types";
 
 const APP_ID = typeof (globalThis as { __app_id?: string }).__app_id !== "undefined"
   ? (globalThis as { __app_id?: string }).__app_id ?? "oatmeal-bars-m1"
@@ -41,6 +44,7 @@ export default function Home() {
   const [calorieGoal] = useState(2000);
   const [profile, setProfile] = useLocalStorageState<DvProfile>(`${APP_ID}-profile`, "adult");
   const [savedFoods, setSavedFoods] = useLocalStorageState<SavedFood[]>("saved-foods", []);
+  const [cacheVersion, setCacheVersion] = useState(0);
 
   const handleSearch = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -96,6 +100,7 @@ export default function Home() {
     if (!selectedFood) return;
     const entry: Entry = {
       id: Date.now(),
+      type: "food",
       fdcId: selectedFood.fdcId,
       description: selectedFood.description,
       grams: Number.parseFloat(String(selectedFood.amount)) || 0,
@@ -108,6 +113,17 @@ export default function Home() {
     setSearchResults([]);
   };
 
+  const logMeal = (meal: MealTemplate) => {
+    const entry: Entry = {
+      id: Date.now(),
+      type: "meal",
+      name: meal.name,
+      ingredients: meal.ingredients.map((ingredient) => ({ ...ingredient })),
+      timestamp: new Date().toISOString(),
+    };
+    setLog((prev) => [entry, ...prev]);
+  };
+
   const toggleSavedFood = (food: SavedFood) => {
     setSavedFoods((prev) => {
       const exists = prev.some((item) => item.fdcId === food.fdcId);
@@ -118,12 +134,36 @@ export default function Home() {
     });
   };
 
+  useEffect(() => {
+    const hydrateMealFoods = async () => {
+      const missingIds = log
+        .filter((entry) => entry.type === "meal")
+        .flatMap((entry) => getMissingFoodIds(entry.ingredients));
+      if (missingIds.length === 0) return;
+      const fetched = await ensureFoodsCached(missingIds);
+      if (fetched.length > 0) {
+        setCacheVersion((prev) => prev + 1);
+      }
+    };
+    void hydrateMealFoods();
+  }, [log]);
+
   const totals = useMemo<Totals>(() => {
     const acc: Totals = {};
     TRACKED_CODES.forEach((code) => {
       acc[code] = { total: 0, status: "missing" };
     });
     log.forEach((entry) => {
+      if (entry.type === "meal") {
+        const mealTotals = getMealTotalsFromCache(entry.ingredients);
+        TRACKED_CODES.forEach((code) => {
+          acc[code].total += mealTotals[code].total;
+          if (mealTotals[code].status === "present") {
+            acc[code].status = "present";
+          }
+        });
+        return;
+      }
       TRACKED_CODES.forEach((code) => {
         const meta = NUTRIENT_METADATA[code];
         const nData = entry.nutrients.find(
@@ -141,7 +181,7 @@ export default function Home() {
       });
     });
     return acc;
-  }, [log]);
+  }, [log, cacheVersion]);
 
   const resetToday = () => {
     if (!confirm("Reset today?")) return;
@@ -223,6 +263,8 @@ export default function Home() {
               onCancel={() => setSelectedFood(null)}
             />
           )}
+
+          <MealsCard onLogMeal={logMeal} />
 
           <EntryList
             entries={log}
