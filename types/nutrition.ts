@@ -17,6 +17,11 @@ export type FoodSearchResult = {
   dataType: string;
 };
 
+export type SavedFood = {
+  fdcId: number;
+  description: string;
+};
+
 export type FoodNutrient = {
   nutrientId?: number;
   amount: number;

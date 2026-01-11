@@ -12,14 +12,21 @@ import isSameLocalDay from "@/lib/date/isSameLocalDay";
 import { DV_PROFILE_LABELS, DV_PROFILES } from "@/lib/nutrition/dailyValues";
 import { NUTRIENT_METADATA, TRACKED_CODES } from "@/lib/nutrition/metadata";
 import { getFoodDetails, RateLimitError, searchFoods } from "@/lib/usda/client";
-import type { DvProfile, Entry, FoodDetails, FoodSearchResult, Totals } from "@/types/nutrition";
+import { cacheFood, getCachedFood, searchCachedFoods } from "@/lib/cache/foodCache";
+import type {
+  DvProfile,
+  Entry,
+  FoodDetails,
+  FoodSearchResult,
+  SavedFood,
+  Totals,
+} from "@/types/nutrition";
 
 const APP_ID = typeof (globalThis as { __app_id?: string }).__app_id !== "undefined"
   ? (globalThis as { __app_id?: string }).__app_id ?? "oatmeal-bars-m1"
   : "oatmeal-bars-m1";
 
 export default function Home() {
-  const [apiKey, setApiKey] = useLocalStorageState<string>(`${APP_ID}-apikey`, "DEMO_KEY");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<FoodSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -33,6 +40,7 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<"label" | "table">("label");
   const [calorieGoal] = useState(2000);
   const [profile, setProfile] = useLocalStorageState<DvProfile>(`${APP_ID}-profile`, "adult");
+  const [savedFoods, setSavedFoods] = useLocalStorageState<SavedFood[]>("saved-foods", []);
 
   const handleSearch = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -43,7 +51,12 @@ export default function Home() {
     setSearchResults([]);
 
     try {
-      const results = await searchFoods(apiKey, searchQuery);
+      const cachedResults = searchCachedFoods(searchQuery);
+      if (cachedResults.length > 0) {
+        setSearchResults(cachedResults);
+        return;
+      }
+      const results = await searchFoods(searchQuery);
       setSearchResults(results);
       if (results.length === 0) setError("No results found.");
     } catch (err) {
@@ -62,7 +75,13 @@ export default function Home() {
     setError(null);
     setRateLimited(false);
     try {
-      const data = await getFoodDetails(apiKey, fdcId);
+      const cachedFood = getCachedFood(fdcId);
+      if (cachedFood) {
+        setSelectedFood({ ...cachedFood, amount: 100 });
+        return;
+      }
+      const data = await getFoodDetails(fdcId);
+      cacheFood(data);
       setSelectedFood({ ...data, amount: 100 });
     } catch (err) {
       if (err instanceof RateLimitError) {
@@ -87,6 +106,16 @@ export default function Home() {
     setSelectedFood(null);
     setSearchQuery("");
     setSearchResults([]);
+  };
+
+  const toggleSavedFood = (food: SavedFood) => {
+    setSavedFoods((prev) => {
+      const exists = prev.some((item) => item.fdcId === food.fdcId);
+      if (exists) {
+        return prev.filter((item) => item.fdcId !== food.fdcId);
+      }
+      return [food, ...prev];
+    });
   };
 
   const totals = useMemo<Totals>(() => {
@@ -180,6 +209,8 @@ export default function Home() {
             rateLimited={rateLimited}
             results={searchResults}
             onSelectFood={selectFood}
+            savedFoods={savedFoods}
+            onToggleSave={toggleSavedFood}
           />
 
           {selectedFood && (
