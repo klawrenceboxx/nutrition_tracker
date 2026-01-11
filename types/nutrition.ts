@@ -1,3 +1,5 @@
+import type { MealIngredient } from "@/lib/meals/types";
+
 export type DvProfile = "adult" | "infant" | "child_1_3" | "pregnant_lactating";
 export type DvSource = "drv" | "rdi";
 
@@ -36,14 +38,25 @@ export type FoodDetails = {
   foodNutrients: FoodNutrient[];
 };
 
-export type Entry = {
+export type FoodEntry = {
   id: number;
+  type?: "food";
   fdcId: number;
   description: string;
   grams: number;
   nutrients: FoodNutrient[];
   timestamp: string;
 };
+
+export type MealEntry = {
+  id: number;
+  type: "meal";
+  name: string;
+  ingredients: MealIngredient[];
+  timestamp: string;
+};
+
+export type Entry = FoodEntry | MealEntry;
 
 export type NutrientTotal = {
   total: number;
