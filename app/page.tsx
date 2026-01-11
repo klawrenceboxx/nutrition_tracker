@@ -9,9 +9,10 @@ import FoodSearchCard from "@/components/search/FoodSearchCard";
 import SelectedFoodCard from "@/components/search/SelectedFoodCard";
 import useLocalStorageState from "@/hooks/useLocalStorageState";
 import isSameLocalDay from "@/lib/date/isSameLocalDay";
+import { DV_PROFILE_LABELS, DV_PROFILES } from "@/lib/nutrition/dailyValues";
 import { NUTRIENT_METADATA, TRACKED_CODES } from "@/lib/nutrition/metadata";
 import { getFoodDetails, RateLimitError, searchFoods } from "@/lib/usda/client";
-import type { Entry, FoodDetails, FoodSearchResult, Totals } from "@/types/nutrition";
+import type { DvProfile, Entry, FoodDetails, FoodSearchResult, Totals } from "@/types/nutrition";
 
 const APP_ID = typeof (globalThis as { __app_id?: string }).__app_id !== "undefined"
   ? (globalThis as { __app_id?: string }).__app_id ?? "oatmeal-bars-m1"
@@ -31,6 +32,7 @@ export default function Home() {
   const [log, setLog] = useLocalStorageState<Entry[]>(`${APP_ID}-log`, []);
   const [viewMode, setViewMode] = useState<"label" | "table">("label");
   const [calorieGoal] = useState(2000);
+  const [profile, setProfile] = useLocalStorageState<DvProfile>(`${APP_ID}-profile`, "adult");
 
   const handleSearch = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -139,7 +141,29 @@ export default function Home() {
               </button>
             </div>
             <div className="bg-slate-700/60 border border-slate-600 rounded-lg p-4 text-sm">
-              Coming soon.
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                    Daily Value Profile
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Update this to recalculate %DV across the nutrition panel.
+                  </p>
+                </div>
+                <div className="sm:w-56">
+                  <select
+                    value={profile}
+                    onChange={(event) => setProfile(event.target.value as DvProfile)}
+                    className="w-full bg-slate-800 text-white border border-slate-600 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    {DV_PROFILES.map((option) => (
+                      <option key={option} value={option}>
+                        {DV_PROFILE_LABELS[option]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -181,6 +205,7 @@ export default function Home() {
             onChangeView={setViewMode}
             totals={totals}
             calorieGoal={calorieGoal}
+            profile={profile}
           />
         </div>
       </PageSection>

@@ -1,8 +1,12 @@
+export type DvProfile = "adult" | "infant" | "child_1_3" | "pregnant_lactating";
+export type DvSource = "drv" | "rdi";
+
 export type NutrientMeta = {
   name: string;
   unit: string;
-  dv: number;
   category: "Macros" | "Vitamins" | "Minerals";
+  dvKey?: string;
+  dvSource?: DvSource;
   isGoal?: boolean;
   fallback?: number;
 };

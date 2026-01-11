@@ -1,6 +1,6 @@
 "use client";
 
-import type { Totals } from "@/types/nutrition";
+import type { DvProfile, Totals } from "@/types/nutrition";
 import NutrientDetailsTable from "@/components/nutrition/NutrientDetailsTable";
 import NutrientSummaryView from "@/components/nutrition/NutrientSummaryView";
 
@@ -9,6 +9,7 @@ type NutritionPanelProps = {
   onChangeView: (mode: "label" | "table") => void;
   totals: Totals;
   calorieGoal: number;
+  profile: DvProfile;
 };
 
 export default function NutritionPanel({
@@ -16,6 +17,7 @@ export default function NutritionPanel({
   onChangeView,
   totals,
   calorieGoal,
+  profile,
 }: NutritionPanelProps) {
   return (
     <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
@@ -44,10 +46,20 @@ export default function NutritionPanel({
 
       <div className="p-5">
         {viewMode === "label" ? (
-          <NutrientSummaryView totals={totals} calorieGoal={calorieGoal} />
+          <NutrientSummaryView totals={totals} calorieGoal={calorieGoal} profile={profile} />
         ) : (
-          <NutrientDetailsTable totals={totals} calorieGoal={calorieGoal} />
+          <NutrientDetailsTable totals={totals} calorieGoal={calorieGoal} profile={profile} />
         )}
+        <p className="text-[10px] text-slate-400 mt-4">
+          Daily Values and Recommended Intakes are based on FDA and NIH reference tables.
+          Sources:
+          <br />
+          FDA DRVs: https://www.fda.gov/media/99059/download
+          <br />
+          FDA DRVs (Food Components): https://www.fda.gov/media/99069/download
+          <br />
+          NIH ODS: https://ods.od.nih.gov/HealthInformation/dailyvalues.aspx
+        </p>
       </div>
     </div>
   );
